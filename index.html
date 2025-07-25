@@ -1,16 +1,242 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Consulta el tiempo</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌤️ Mi App del Clima</title>
+    <style>
+        /* (todo el CSS igual que antes, pero compactado) */
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#74b9ff 0%,#0984e3 100%);min-height:100vh;padding:20px}.container{max-width:800px;margin:0 auto}.header{text-align:center;color:white;margin-bottom:30px}.header h1{font-size:2.5em;margin-bottom:10px;text-shadow:2px 2px 4px rgba(0,0,0,.3)}.search-container{background:white;border-radius:15px;padding:25px;box-shadow:0 10px 30px rgba(0,0,0,.2);margin-bottom:30px;position:relative}.form-group{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}#city{flex:1;padding:15px;border:2px solid #ddd;border-radius:10px;font-size:16px;min-width:200px;transition:border-color .3s}#city:focus{outline:none;border-color:#3498db}.btn{padding:15px 25px;border:none;border-radius:10px;font-size:16px;cursor:pointer;transition:all .3s;font-weight:bold}.btn-primary{background:#3498db;color:white}.btn-primary:hover{background:#2980b9;transform:translateY(-2px)}.btn-location{background:#27ae60;color:white;display:flex;align-items:center;gap:8px}.btn-location:hover{background:#229954;transform:translateY(-2px)}.btn:disabled{background:#bdc3c7;cursor:not-allowed;transform:none}#recentSearches{margin-top:20px}#recentSearches h3{margin-bottom:15px;color:#2c3e50}.recent-buttons{display:flex;flex-wrap:wrap;gap:10px}.recent-btn{padding:8px 15px;background:#3498db;color:white;border:none;border-radius:20px;cursor:pointer;font-size:.9em;transition:all .3s}.recent-btn:hover{background:#2980b9;transform:scale(1.05)}#result{background:white;border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,.2);overflow:hidden}.loading{display:flex;align-items:center;justify-content:center;gap:15px;padding:40px}.spinner{border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.weather-card{padding:30px;border-radius:15px}.weather-header{display:flex;align-items:center;gap:20px;margin:20px 0;flex-wrap:wrap}.weather-icon{width:120px;height:120px}.temperature{font-size:3.5em;font-weight:bold;margin:0}.description{font-size:1.3em;text-transform:capitalize;margin:5px 0}.feels-like{font-size:1.1em;opacity:.8}.weather-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-top:30px}.weather-item{background:rgba(255,255,255,.2);padding:20px;border-radius:12px;backdrop-filter:blur(10px)}.weather-item h4{margin:0 0 15px 0;font-size:1.2em}.weather-item p{margin:8px 0;font-size:1em}.tips{margin-top:25px;padding:15px;background:rgba(255,255,255,.15);border-radius:10px;backdrop-filter:blur(10px)}.error{background:#ffebee;color:#c62828;padding:30px;border-radius:15px;border-left:5px solid #c62828}.error h3{margin:0 0 15px 0}.error-suggestions{margin-top:20px;padding:15px;background:rgba(255,255,255,.5);border-radius:8px}.error-suggestions ul{margin:10px 0;padding-left:25px}.error-suggestions li{margin:5px 0}.suggestions{margin-top:10px;max-height:200px;overflow-y:auto;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.15);z-index:1000}.suggestion-item{padding:10px 12px;cursor:pointer;font-size:.95em;border-bottom:1px solid #f1f1f1}.suggestion-item:hover{background:#f0f8ff}.suggestion-item:last-child{border-bottom:none}@media (max-width:600px){.form-group{flex-direction:column}.weather-header{flex-direction:column;text-align:center}.temperature{font-size:2.5em}.weather-grid{grid-template-columns:1fr}}
+    </style>
 </head>
 <body>
-  <h1>Consulta el tiempo en cualquier ciudad</h1>
-  <form id="weatherForm">
-    <input type="text" id="city" placeholder="Introduce una ciudad" required>
-    <button type="submit">Consultar</button>
-  </form>
-  <div id="result"></div>
-  <script src="app.js"></script>
+    <div class="container">
+        <div class="header">
+            <h1>🌤️ Mi App del Clima</h1>
+            <p>Consulta el tiempo actual en cualquier ciudad del mundo</p>
+        </div>
+
+        <div class="search-container">
+            <form id="weatherForm">
+                <div class="form-group">
+                    <input type="text" id="city" placeholder="Ingresa el nombre de una ciudad..." autocomplete="off">
+                    <button type="submit" class="btn btn-primary">🔍 Buscar</button>
+                    <button type="button" id="locationBtn" class="btn btn-location">📍 Mi Ubicación</button>
+                </div>
+            </form>
+            <div id="citySuggestions" class="suggestions"></div>
+            <div id="recentSearches"></div>
+        </div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const apiKey = '501f7df7ac1617914c2892fbece5a2f7'; // <-- Reemplaza por tu clave gratuita de OpenWeather
+        const cityInput = document.getElementById('city');
+        const suggestionsBox = document.getElementById('citySuggestions');
+
+        cityInput.addEventListener('input', debounce(searchCities, 300));
+
+        function debounce(fn, delay) {
+            let timer;
+            return function (...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        // Busca varias ciudades con el mismo nombre
+        function searchCities() {
+            const q = cityInput.value.trim();
+            if (q.length < 2) {
+                suggestionsBox.innerHTML = '';
+                return;
+            }
+
+            fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=5&appid=${apiKey}`)
+                .then(r => r.json())
+                .then(list => {
+                    suggestionsBox.innerHTML = '';
+                    if (!Array.isArray(list)) return;
+                    list.forEach(loc => {
+                        const div = document.createElement('div');
+                        div.className = 'suggestion-item';
+                        div.textContent = `${loc.name}, ${loc.state ? loc.state + ', ' : ''}${loc.country}`;
+                        div.addEventListener('click', () => {
+                            cityInput.value = `${loc.name},${loc.country}`;
+                            suggestionsBox.innerHTML = '';
+                            document.getElementById('weatherForm').dispatchEvent(new Event('submit'));
+                        });
+                        suggestionsBox.appendChild(div);
+                    });
+                })
+                .catch(() => suggestionsBox.innerHTML = '');
+        }
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('#citySuggestions') && e.target !== cityInput) {
+                suggestionsBox.innerHTML = '';
+            }
+        });
+
+        // Resto de funciones (sin cambios)
+        function getWeatherByCoords(lat, lon) {
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=es`;
+            fetchWeatherData(url);
+        }
+        function getWeatherByCity(city) {
+            const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=es`;
+            fetchWeatherData(url);
+        }
+        function fetchWeatherData(url) {
+            document.getElementById('result').innerHTML = `
+                <div class="loading"><div class="spinner"></div><p>Consultando el tiempo...</p></div>`;
+            fetch(url)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.cod === 200) displayWeatherData(d);
+                    else displayError(d);
+                })
+                .catch(displayConnectionError);
+        }
+        function displayWeatherData(data) {
+            const localTime = new Date((data.dt + data.timezone) * 1000);
+            const timeString = localTime.toUTCString().replace('GMT', '').trim();
+            const sunrise = new Date(data.sys.sunrise * 1000);
+            const sunset = new Date(data.sys.sunset * 1000);
+            const now = new Date(data.dt * 1000);
+            const isDayTime = now >= sunrise && now <= sunset;
+            let bg = '#87CEEB', color = 'black';
+            const wm = data.weather[0].main.toLowerCase();
+            if (wm.includes('rain')) { bg = '#708090'; color = 'white'; }
+            else if (wm.includes('cloud')) bg = '#B0C4DE';
+            else if (wm.includes('snow')) bg = '#F0F8FF';
+            else if (wm.includes('thunderstorm')) { bg = '#2F4F4F'; color = 'white'; }
+            else if (!isDayTime) { bg = '#2F4F4F'; color = 'white'; }
+            let tips = [];
+            if (wm.includes('rain')) tips.push('☔ No olvides llevar paraguas');
+            if (data.main.temp < 10) tips.push('🧥 Hace frío, abrígate bien');
+            if (data.main.temp > 30) tips.push('☀️ Hace calor, mantente hidratado');
+            if (data.wind.speed > 10) tips.push('💨 Viento fuerte, ten cuidado');
+            if (data.main.humidity > 80) tips.push('💧 Humedad alta, puede sentirse pesado');
+            document.getElementById('result').innerHTML = `
+                <div class="weather-card" style="background:${bg};color:${color}">
+                    <h2 style="margin-top:0;">🌍 ${data.name}, ${data.sys.country}</h2>
+                    <div class="weather-header">
+                        <img src="https://openweathermap.org/img/wn/${data.weather[0].icon}@4x.png" class="weather-icon">
+                        <div>
+                            <h3 class="temperature">${Math.round(data.main.temp)}°C</h3>
+                            <p class="description">${data.weather[0].description}</p>
+                            <p class="feels-like">Sensación térmica: ${Math.round(data.main.feels_like)}°C</p>
+                        </div>
+                    </div>
+                    <div class="weather-grid">
+                        <div class="weather-item"><h4>🌡️ Temperaturas</h4>
+                            <p><strong>Actual:</strong> ${Math.round(data.main.temp)}°C</p>
+                            <p><strong>Mínima:</strong> ${Math.round(data.main.temp_min)}°C</p>
+                            <p><strong>Máxima:</strong> ${Math.round(data.main.temp_max)}°C</p>
+                        </div>
+                        <div class="weather-item"><h4>💨 Viento y Presión</h4>
+                            <p><strong>Velocidad:</strong> ${data.wind.speed} m/s</p>
+                            ${data.wind.deg?`<p><strong>Dirección:</strong> ${data.wind.deg}°</p>`:''}
+                            <p><strong>Presión:</strong> ${data.main.pressure} hPa</p>
+                        </div>
+                        <div class="weather-item"><h4>💧 Humedad y Visibilidad</h4>
+                            <p><strong>Humedad:</strong> ${data.main.humidity}%</p>
+                            ${data.visibility?`<p><strong>Visibilidad:</strong> ${(data.visibility/1000).toFixed(1)} km</p>`:''}
+                            ${data.clouds?`<p><strong>Nubosidad:</strong> ${data.clouds.all}%</p>`:''}
+                        </div>
+                        <div class="weather-item"><h4>🌅 Horarios Solares</h4>
+                            <p><strong>Amanecer:</strong> ${sunrise.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</p>
+                            <p><strong>Atardecer:</strong> ${sunset.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</p>
+                            <p><strong>Estado:</strong> ${isDayTime?'☀️ Día':'🌙 Noche'}</p>
+                        </div>
+                    </div>
+                    ${tips.length?`<div class="tips"><h4>💡 Consejos:</h4>${tips.map(t=>`<p>• ${t}</p>`).join('')}</div>`:''}
+                    <div style="margin-top:25px;padding:15px;background:rgba(255,255,255,.1);border-radius:8px;font-size:.9em">
+                        <p><strong>Última actualización:</strong> ${timeString}</p>
+                        <p><strong>Coordenadas:</strong> ${data.coord.lat.toFixed(4)}, ${data.coord.lon.toFixed(4)}</p>
+                    </div>
+                </div>`;
+            saveToRecentSearches(data);
+        }
+
+        function displayError(data){
+            document.getElementById('result').innerHTML=`
+                <div class="error">
+                    <h3>❌ Ciudad no encontrada</h3>
+                    <p><strong>Error:</strong> ${data.message}</p>
+                    <p><strong>Código:</strong> ${data.cod}</p>
+                    <div class="error-suggestions">
+                        <p><strong>Sugerencias:</strong></p>
+                        <ul>
+                            <li>Verifica la ortografía</li>
+                            <li>Incluye el país: "Córdoba, ES"</li>
+                        </ul>
+                    </div>
+                </div>`;
+        }
+        function displayConnectionError(){
+            document.getElementById('result').innerHTML=`
+                <div class="error">
+                    <h3>🚫 Error de conexión</h3>
+                    <p><strong>No se pudo consultar el tiempo</strong></p>
+                </div>`;
+        }
+        function saveToRecentSearches(data){
+            let rs=JSON.parse(localStorage.getItem('recentWeatherSearches')||'[]');
+            const ns={city:data.name,country:data.sys.country,timestamp:Date.now(),coords:{lat:data.coord.lat,lon:data.coord.lon}};
+            rs=rs.filter(s=>s.city.toLowerCase()!==data.name.toLowerCase());
+            rs.unshift(ns);
+            if(rs.length>5) rs=rs.slice(0,5);
+            localStorage.setItem('recentWeatherSearches',JSON.stringify(rs));
+            updateRecentSearches();
+        }
+        function updateRecentSearches(){
+            const rs=JSON.parse(localStorage.getItem('recentWeatherSearches')||'[]');
+            const c=document.getElementById('recentSearches');
+            if(rs.length){
+                c.innerHTML=`
+                    <h3>🕐 Búsquedas recientes:</h3>
+                    <div class="recent-buttons">
+                        ${rs.map(s=>`<button class="recent-btn" onclick="getWeatherByCity('${s.city},${s.country}')">${s.city}, ${s.country}</button>`).join('')}
+                        <button class="recent-btn" onclick="clearRecentSearches()" style="background:#e74c3c;">🗑️ Limpiar</button>
+                    </div>`;
+            }else c.innerHTML='';
+        }
+        function clearRecentSearches(){
+            localStorage.removeItem('recentWeatherSearches');
+            updateRecentSearches();
+        }
+
+        document.getElementById('weatherForm').addEventListener('submit',e=>{
+            e.preventDefault();
+            const city=document.getElementById('city').value.trim();
+            if(!city){
+                document.getElementById('result').innerHTML=`
+                    <div class="error"><h3>⚠️ Campo requerido</h3><p>Introduce una ciudad.</p></div>`;
+                return;
+            }
+            getWeatherByCity(city);
+            suggestionsBox.innerHTML='';
+        });
+
+        document.getElementById('locationBtn').addEventListener('click',()=>{
+            const btn=this,orig=btn.innerHTML;
+            if(!navigator.geolocation){alert('Geolocalización no soportada');return;}
+            btn.innerHTML='🔄 Obteniendo ubicación...';btn.disabled=true;
+            navigator.geolocation.getCurrentPosition(pos=>{
+                getWeatherByCoords(pos.coords.latitude,pos.coords.longitude);
+                btn.innerHTML=orig;btn.disabled=false;
+            },err=>{
+                btn.innerHTML=orig;btn.disabled=false;
+                displayConnectionError();
+            },{enableHighAccuracy:true,timeout:10000,maximumAge:300000});
+        });
+
+        document.addEventListener('DOMContentLoaded',()=>{
+            updateRecentSearches();
+        });
+    </script>
 </body>
 </html>
